@@ -12,7 +12,7 @@ function App(props)
       <h1 onClick={() => props.alertMessage(props.message)}> Click Default Alert Action</h1>
       <h1 onClick={() => props.sagaStart()}> Click Default Saga Action</h1>
       <h1>Result: </h1>
-      {JSON.stringify(props.result)}
+      <p>{JSON.stringify(props.result)}</p>
     </div>
   );
 }
