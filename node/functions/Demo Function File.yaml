@@ -1,6 +1,0 @@
-uuid: kJDXfd5zWZKhlRQcG05VE
-name: TestFunction1
-frequency: S:45
-URL: 'http://localhost:3005/serviceRunning'
-function: 'Write#2#TestingTimeFuncitons'
-body: {name:'newFunction'}

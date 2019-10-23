@@ -11,13 +11,16 @@ var yaml = require('js-yaml');
 let fetch = require('node-fetch');
 var axios = require('axios');
 var date = require('date-and-time');
-
-
+const nodemailer = require("nodemailer");
 var time = 0;
 var lines = { heading: 'Server Backend', lines: [] };
 var functions = [];
 
 var uuidgen = uuidshort();
+var bodyParser = require('body-parser')
+app.use(bodyParser.json());
+
+
 
 
 /* #region onLoad   */
@@ -30,9 +33,19 @@ function loadFunctionsFromFolder() {
                 var rawFunction = yaml.safeLoad(data);
                 var newFunction = {};
                 newFunction.name = rawFunction.name;
-                if (rawFunction.frequency) {
-                    newFunction.frequency = rawFunction.frequency;
-                    newFunction.cooldown = rawFunction.frequency;
+                if (rawFunction.frequency) 
+                {
+                    if(rawFunction.frequency.split(":")[0] == "S")
+                    {
+                        newFunction.frequency = parseInt(rawFunction.frequency.split(":")[1]);
+                        newFunction.cooldown = parseInt(rawFunction.frequency.split(":")[1]);
+                    }
+                    else if (rawFunction.frequency.split(":")[0] == "M")
+                    {
+                        newFunction.frequency = parseInt(rawFunction.frequency.split(":")[1]) * 60;
+                        newFunction.cooldown = parseInt(rawFunction.frequency.split(":")[1]) * 60;
+                    }
+                    
                 }
 
                 newFunction.URL = rawFunction.URL;
@@ -52,9 +65,6 @@ function loadFunctionsFromFolder() {
 function onLoad() {
     loadFunctionsFromFolder();
 }
-
-
-
 /* #endregion */
 
 
@@ -63,7 +73,6 @@ function onLoad() {
 
 /* #region  mainFunctions */
 //Main Functions
-
 function mainFunc() {
     //Run These Functions first
     console.log('Starting Server');
@@ -101,6 +110,7 @@ function startExpressFunctions()
 {
     app.use(cors());
     testRunningService();
+    createNewFunction();
     app.listen(3005, function () { writeLine("Web-Server Being Started", 1); lineToLog("Web Service Started") });
 }
 
@@ -114,7 +124,30 @@ function testRunningService()
         else {
             res.send('Service Up');
         }
-    })
+    });
+}
+
+function createNewFunction()
+{
+    app.post('/createNewService', function (req, res, next) {
+        
+        //Get info from who created and also log it.
+        var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        var newuuidservice = uuidgen.new();
+        const now = new Date();
+        var dtstring = date.format(now, 'YYYY/MM/DD HH:mm:ss', true);
+        fs.writeFile("./functions/" + newuuidservice + '.yaml',yaml.dump({creationDate:dtstring,name:req.body.name,frequency:req.body.frequency,URL:req.body.URL,email:req.body.email,uuid:newuuidservice, ...req.body}), (err) => {writeLine(`Function ${newuuidservice} Created`)});
+
+        
+
+        writeLine("Service " + req.body.name + " Created with uuid: " + newuuidservice + " from IP: " + ip,4,'',"#ffff00");
+        lineToLog("Service " + req.body.name + " Created with uuid: " + newuuidservice + " from IP: " + ip);
+        sendEmails(req.body.email, `<h3>Created Service ${req.body.name} with uuid ${newuuidservice} </h3>
+        <h4>For the Node Server Service </h4>
+        <h4>Please save this email as the UUID will be required to make changes.</h4>`);
+        //Send Response to creator 
+        res.send('Created Service ' + req.body.name + ' with uuid ' + newuuidservice + ' Please Write this uuid down.');
+    });
 }
 /* #endregion */
 
@@ -132,69 +165,59 @@ function updateFunction() {
         lines.lines[i].cooldown = lines.lines[i].cooldown - 1;
         if (lines.lines[i].cooldown <= 0) {
             lines.lines.splice(i, 1);
+
         }
+        //console.log(JSON.stringify(lines.lines))
 
     }
 
 
     for (var i = functions.length - 1; i >= 0; i--) {
-        if (functions[i].cooldown <= time) {
-            //Log Job Creation
-            var newJobUUID = uuidgen.new();
-            writeLine("Job ID : " + newJobUUID + "-" + functions[i].uuid + " Running", 2, '', '#0000a0');
-            lineToLog("  Job ID: " + newJobUUID + "-" + functions[i].uuid + " Started");
+       
+            if (functions[i].cooldown <= time) {
+               
+                //Log Job Creation
+                var newJobUUID = uuidgen.new();
+                writeLine("Job ID : " + newJobUUID + "-" + functions[i].uuid + " Running", 2, '', '#0000a0');
+                lineToLog("  Job ID: " + newJobUUID + "-" + functions[i].uuid + " Started");
 
+                if(functions[i].function)
+                {
+                    //Check Various Commands to interact with application itself
+                    switch (functions[i].function.split("#")[0]) {
+                                
+                                case "Write":
+                                writeLine(functions[i].function.split("#")[2], functions[i].function.split("#")[1],'','');
+                                break;
 
-            //Check Various Commands to interact with application itself
-            switch (functions[i].function.split("#")[0]) {
-                        
-                        case "Write":
-                         writeLine('', '#60f542', functions[i].function.split("#")[2], functions[i].function.split("#")[1]);
-                         break;
+                                case "Email":
+                                break;
 
-                        default:
-                         break;
+                                default:
+                                break;
+                    }
+                }
+
+                //Run URL Functions if needed.
+                if (functions[i].URL) {
+                    axios.get(functions[i].URL + "?uuid=" + newJobUUID + "-" + functions[i].uuid)
+                        .then(response => {
+                            writeLine(" Response:  " + JSON.stringify(response.data), 1);
+                            lineToLog(`  Job: ${response.data.split(":")[0]} Response:    ${response.data.split(":")[1]}`);
+                        })
+                        .catch(err => {
+                            writeLine(err + "  ", 2);
+                        });
+                }
+    
+                functions[i].cooldown = functions[i].frequency + time;
             }
-
-            //Run URL Functions if needed.
-            if (functions[i].URL) {
-                axios.get(functions[i].URL + "?uuid=" + newJobUUID + "-" + functions[i].uuid)
-                    .then(response => {
-                        writeLine(" Response:  " + JSON.stringify(response.data), 1);
-                        lineToLog(`  Job: ${response.data.split(":")[0]} Response:    ${response.data.split(":")[1]}`);
-                    })
-                    .catch(error => {
-                        console.log(error);
-                    });
-            }
-
-            functions[i].cooldown = functions[i].frequency + time;
-        }
 
         
     }
 }
 
 /* #endregion */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -215,6 +238,35 @@ function writeScreen() {
     }
 
 
+}
+
+async function sendEmails(sendto,data) {
+
+    var transporter = nodemailer.createTransport({
+        host: `SERVER GOES HERE`,
+        port: 587,
+        secure: false,
+        auth: {
+            user: `EMAIL GOES HERE`,
+            pass: `PASSWORD GOES HERE`
+
+        },
+        tls: {
+            // ciphers: 'SSLv3'
+            rejectUnauthorized: false
+        }
+    });
+
+    // setup email data with unicode symbols
+    let mailOptions = {
+        from: `"Zach Moran" <Zachary.Dewitt-Moran@bemis.com>'`,
+        to: sendto,
+        subject: "Service Email from Node Server",
+        html: data
+    };
+
+    let info = await transporter.sendMail(mailOptions)
+    lineToLog("EMAIL SENT: " + JSON.stringify(info))
 }
 
 function lineToLog(data) {
