@@ -259,7 +259,7 @@ async function sendEmails(sendto,data) {
 
     // setup email data with unicode symbols
     let mailOptions = {
-        from: `"Zach Moran" <Zachary.Dewitt-Moran@bemis.com>'`,
+        from: `Name`,
         to: sendto,
         subject: "Service Email from Node Server",
         html: data
