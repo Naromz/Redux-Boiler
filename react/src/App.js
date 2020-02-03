@@ -2,7 +2,8 @@
 import React, { Component } from 'react';
 import './App.css';
 import { connect } from 'react-redux';
-import {alertMessage,sagaStart} from './Actions/globalActions'
+import {alertMessage,sagaStart} from './Actions/globalActions';
+import history from './history';
 
 function App(props)
 {
@@ -10,10 +11,12 @@ function App(props)
   return (
     <div className="App">
       <h1 onClick={() => props.alertMessage(props.message)}> Click Default Alert Action</h1>
-      <h1 onClick={() => props.sagaStart()}> Click Default Saga Action</h1>
+      <h1 onClick={() => history.push("/test")}> Click Default Saga Action</h1>
       <h1>Result: </h1>
       <p>{JSON.stringify(props.result)}</p>
     </div>
+
+
   );
 }
 //THIS FUNCTION MAPS STORE TO STATE
